@@ -90,6 +90,7 @@ model User {
   timezone          String           @default("Asia/Shanghai") @db.VarChar(64)
   locale            String           @default("zh-CN") @db.VarChar(16)
   status            UserStatus       @default(ACTIVE)
+  version           Int              @default(0)
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
   refreshSessions   RefreshSession[]

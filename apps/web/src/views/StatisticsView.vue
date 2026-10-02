@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, computed } from "vue";
 import { BarChart, LineChart, PieChart } from "echarts/charts";
 import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
 import { init, use, type ECharts } from "echarts/core";
@@ -9,7 +9,8 @@ use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipCompo
 import { apiFetch, ApiError } from "../api/client.js";
 import LoadingBlock from "../components/LoadingBlock.vue";
 import MetricCard from "../components/MetricCard.vue";
-import { annotationLabels, formatDuration } from "../utils/format.js";
+import { useAuthStore } from "../stores/auth.js";
+import { annotationLabels, dayRangeInTimezone, formatDuration, getFormatPreferences } from "../utils/format.js";
 
 interface Overview { practiceCount: number; totalDurationMs: number; annotationCount: number; averageAnnotationsPerPractice: number; newGoalCount: number; completedGoalCount: number; overdueGoalCount: number; goalCompletionRate: number }
 interface Trends { data: Array<{ date: string; practiceCount: number; durationMs: number; annotationCount: number }> }
@@ -20,6 +21,9 @@ interface Instruments { data: Array<{ instrument: string; practiceCount: number;
 const range = ref("30");
 const customFrom = ref(new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10));
 const customTo = ref(new Date().toISOString().slice(0, 10));
+const auth = useAuthStore();
+// 统计口径与设置联动：优先使用用户设置时区，与历史时间显示保持一致
+const statisticsTimezone = computed(() => auth.user?.timezone || getFormatPreferences().timezone);
 const overview = ref<Overview | null>(null);
 const trends = ref<Trends | null>(null);
 const issues = ref<Issues | null>(null);
@@ -35,11 +39,16 @@ let issueChart: ECharts | null = null;
 let instrumentChart: ECharts | null = null;
 
 function dates(): { from: Date; to: Date } {
+  const timezone = statisticsTimezone.value;
+  if (range.value === "custom") {
+    return { from: dayRangeInTimezone(customFrom.value, timezone).from, to: dayRangeInTimezone(customTo.value, timezone).to };
+  }
   const to = new Date();
-  if (range.value === "custom") return { from: new Date(`${customFrom.value}T00:00:00`), to: new Date(`${customTo.value}T23:59:59.999`) };
-  const days = Number(range.value);
-  const from = range.value === "year" ? new Date(to.getFullYear(), 0, 1) : new Date(to.getTime() - days * 86_400_000);
-  return { from, to };
+  if (range.value === "year") {
+    const year = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric" }).format(to);
+    return { from: dayRangeInTimezone(`${year}-01-01`, timezone).from, to };
+  }
+  return { from: new Date(to.getTime() - Number(range.value) * 86_400_000), to };
 }
 
 async function load(): Promise<void> {
@@ -47,7 +56,7 @@ async function load(): Promise<void> {
   error.value = "";
   try {
     const { from, to } = dates();
-    const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai" });
+    const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString(), timezone: statisticsTimezone.value });
     const [overviewResult, trendsResult, issuesResult, goalsResult, instrumentsResult] = await Promise.all([
       apiFetch<Overview>(`/api/v1/statistics/overview?${params}`),
       apiFetch<Trends>(`/api/v1/statistics/trends?${params}`),
@@ -116,7 +125,7 @@ onBeforeUnmount(() => { window.removeEventListener("resize", resize); trendChart
 <template>
   <section class="page">
     <header class="page-header">
-      <div><h1>练习统计</h1><p>所有指标由已完成练习、标记、目标与进度实时聚合，不在前端重算口径。</p></div>
+      <div><h1>练习统计</h1><p>口径：时区 {{ statisticsTimezone }}，仅汇总已完成练习，与历史列表时间显示同步；指标由服务端实时聚合，不在前端重算。</p></div>
       <div class="row">
         <select v-model="range" style="width: 150px" @change="load"><option value="7">近 7 天</option><option value="30">近 30 天</option><option value="90">近 90 天</option><option value="year">今年</option><option value="custom">自定义</option></select>
         <button class="button secondary" @click="load">刷新</button>

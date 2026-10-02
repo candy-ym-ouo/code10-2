@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from "vue";
+import { onMounted, reactive, ref, watch, computed } from "vue";
 import { RouterLink } from "vue-router";
 import { apiFetch, ApiError } from "../api/client.js";
 import EmptyState from "../components/EmptyState.vue";
 import LoadingBlock from "../components/LoadingBlock.vue";
 import StatusBadge from "../components/StatusBadge.vue";
-import { formatDateTime, formatDuration, sessionStatusLabels } from "../utils/format.js";
+import { useAuthStore } from "../stores/auth.js";
+import { formatDateTime, formatDuration, getFormatPreferences, sessionStatusLabels } from "../utils/format.js";
 
 interface SessionRow {
   id: string;
@@ -26,6 +27,9 @@ const data = ref<SessionPage>({ data: [], nextCursor: null });
 const loading = ref(true);
 const error = ref("");
 const cursors: string[] = [];
+const auth = useAuthStore();
+// 历史显示与统计口径同步：同一设置时区
+const displayTimezone = computed(() => auth.user?.timezone || getFormatPreferences().timezone);
 
 async function load(cursor?: string): Promise<void> {
   loading.value = true;
@@ -62,7 +66,7 @@ onMounted(() => load());
 <template>
   <section class="page">
     <header class="page-header">
-      <div><h1>练习历史</h1><p>搜索、筛选并回看每一次练习中的音频、问题与目标。</p></div>
+      <div><h1>练习历史</h1><p>搜索、筛选并回看每一次练习中的音频、问题与目标。时间按设置时区 {{ displayTimezone }} 显示，与统计口径一致。</p></div>
       <RouterLink class="button" to="/sessions/new">新建练习</RouterLink>
     </header>
 

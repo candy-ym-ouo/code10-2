@@ -1,3 +1,30 @@
+export interface FormatPreferences {
+  locale: string;
+  timezone: string;
+}
+
+const fallbackPreferences: FormatPreferences = {
+  locale: "zh-CN",
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai",
+};
+
+let preferences: FormatPreferences = { ...fallbackPreferences };
+
+/**
+ * 设置联动入口：用户保存设置（时区 / 界面语言）后由 auth store 调用，
+ * 历史、详情、仪表盘等所有时间显示立即切换到同一口径。
+ */
+export function setFormatPreferences(next: { locale?: string | null; timezone?: string | null }): void {
+  preferences = {
+    locale: next.locale?.trim() || fallbackPreferences.locale,
+    timezone: next.timezone?.trim() || fallbackPreferences.timezone,
+  };
+}
+
+export function getFormatPreferences(): FormatPreferences {
+  return { ...preferences };
+}
+
 export function formatDuration(ms: number | bigint | null | undefined): string {
   const value = Number(ms ?? 0);
   if (!Number.isFinite(value) || value <= 0) return "0 分钟";
@@ -10,7 +37,52 @@ export function formatDuration(ms: number | bigint | null | undefined): string {
 
 export function formatDateTime(value: string | Date | null | undefined): string {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat(preferences.locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: preferences.timezone,
+  }).format(new Date(value));
+}
+
+/** 指定时区在某时刻相对 UTC 的偏移（毫秒），通过 Intl 本地化反推。 */
+function timezoneOffsetMs(instant: Date, timezone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(instant);
+  const values = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  const asUtc = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour) % 24,
+    Number(values.minute),
+    Number(values.second),
+  );
+  return asUtc - instant.getTime();
+}
+
+/**
+ * 将 `YYYY-MM-DD` 解析为指定时区当天的 UTC 区间 [from, to]，
+ * 使统计区间与服务端 `AT TIME ZONE` 分桶、历史显示保持同一口径。
+ */
+export function dayRangeInTimezone(day: string, timezone: string): { from: Date; to: Date } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!match) throw new Error(`日期格式必须为 YYYY-MM-DD：${day}`);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const date = Number(match[3]);
+  const utcMidnight = Date.UTC(year, month - 1, date);
+  const from = new Date(utcMidnight - timezoneOffsetMs(new Date(utcMidnight), timezone));
+  const nextUtcMidnight = Date.UTC(year, month - 1, date + 1);
+  const to = new Date(nextUtcMidnight - timezoneOffsetMs(new Date(nextUtcMidnight), timezone) - 1);
+  return { from, to };
 }
 
 export function toDateTimeLocal(value = new Date()): string {

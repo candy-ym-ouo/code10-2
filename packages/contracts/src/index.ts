@@ -66,7 +66,36 @@ export const updateProfileSchema = z.object({
   defaultInstrument: optionalText(60, "默认乐器"),
   timezone: z.string().trim().min(1).max(64).optional(),
   locale: z.string().trim().min(2).max(16).optional(),
+  version: z.coerce.number().int().nonnegative(),
 });
+
+/**
+ * 设置允许并发合并的偏好字段白名单。
+ * 安全字段（passwordHash、status、email、version）不在其中，
+ * 任何 profile 更新都无法触碰安全设置。
+ */
+export const PROFILE_PREFERENCE_FIELDS = ["displayName", "defaultInstrument", "timezone", "locale"] as const;
+export type ProfilePreferenceField = (typeof PROFILE_PREFERENCE_FIELDS)[number];
+
+export interface ProfilePatchInput {
+  displayName?: string;
+  defaultInstrument?: string | null;
+  timezone?: string;
+  locale?: string;
+}
+
+/**
+ * 字段级合并：只挑选请求中显式提交的偏好字段生成更新集，
+ * 未提交的字段保持数据库中的较新值，从而实现并发修改按版本合并。
+ */
+export function buildProfilePatch(input: ProfilePatchInput): ProfilePatchInput {
+  const patch: ProfilePatchInput = {};
+  if (input.displayName !== undefined) patch.displayName = input.displayName;
+  if (input.defaultInstrument !== undefined) patch.defaultInstrument = input.defaultInstrument;
+  if (input.timezone !== undefined) patch.timezone = input.timezone;
+  if (input.locale !== undefined) patch.locale = input.locale;
+  return patch;
+}
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(128),
   newPassword: passwordSchema,

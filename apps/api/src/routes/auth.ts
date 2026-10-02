@@ -22,7 +22,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
           displayName: input.displayName,
           passwordHash: await hashPassword(input.password),
         },
-        select: { id: true, email: true, displayName: true, defaultInstrument: true, timezone: true, locale: true },
+        select: { id: true, email: true, displayName: true, defaultInstrument: true, timezone: true, locale: true, version: true },
       });
       const session = await issueRefreshSession(reply, request, user);
       await audit(request, "AUTH_REGISTER", "USER", user.id, "SUCCESS");
@@ -51,6 +51,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
           defaultInstrument: user.defaultInstrument,
           timezone: user.timezone,
           locale: user.locale,
+          version: user.version,
         },
         accessToken: session.accessToken,
       };

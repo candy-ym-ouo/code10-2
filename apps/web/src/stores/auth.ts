@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { apiFetch, initializeSession, setAccessToken } from "../api/client.js";
+import { setFormatPreferences } from "../utils/format.js";
 
 export interface User {
   id: string;
@@ -9,6 +10,7 @@ export interface User {
   defaultInstrument: string | null;
   timezone: string;
   locale: string;
+  version: number;
 }
 
 export const useAuthStore = defineStore("auth", () => {
@@ -17,12 +19,18 @@ export const useAuthStore = defineStore("auth", () => {
   const loading = ref(false);
   const isAuthenticated = computed(() => Boolean(user.value));
 
+  function applyUser(next: User | null): void {
+    user.value = next;
+    // 设置联动：时区与界面语言立即作用于全局时间显示与统计口径
+    setFormatPreferences(next ? { locale: next.locale, timezone: next.timezone } : {});
+  }
+
   async function initialize(): Promise<void> {
     if (initialized.value) return;
     loading.value = true;
     try {
       if (await initializeSession()) {
-        user.value = (await apiFetch<{ user: User }>("/api/v1/users/me")).user;
+        applyUser((await apiFetch<{ user: User }>("/api/v1/users/me")).user);
       }
     } finally {
       initialized.value = true;
@@ -38,7 +46,7 @@ export const useAuthStore = defineStore("auth", () => {
         body: JSON.stringify({ email, password }),
       });
       setAccessToken(result.accessToken);
-      user.value = result.user;
+      applyUser(result.user);
     } finally {
       loading.value = false;
     }
@@ -52,7 +60,7 @@ export const useAuthStore = defineStore("auth", () => {
         body: JSON.stringify({ email, password, displayName }),
       });
       setAccessToken(result.accessToken);
-      user.value = result.user;
+      applyUser(result.user);
     } finally {
       loading.value = false;
     }
@@ -63,12 +71,12 @@ export const useAuthStore = defineStore("auth", () => {
       await apiFetch("/api/v1/auth/logout", { method: "POST", body: "{}" });
     } finally {
       setAccessToken(null);
-      user.value = null;
+      applyUser(null);
     }
   }
 
   function updateUser(next: User): void {
-    user.value = next;
+    applyUser(next);
   }
 
   return { user, initialized, loading, isAuthenticated, initialize, login, register, logout, updateUser };

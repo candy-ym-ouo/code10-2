@@ -30,9 +30,15 @@ Refresh Cookie 路径为 `/api/v1/auth`，生产环境在 HTTPS 下自动使用 
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/users/me` | 当前用户 |
-| PATCH | `/users/me` | 更新展示名、默认乐器、时区和语言 |
-| POST | `/users/me/password` | 修改密码并撤销其他会话 |
+| GET | `/users/me` | 当前用户（含设置 `version`） |
+| PATCH | `/users/me` | 更新展示名、默认乐器、时区和语言；必须携带 `version`，按版本做字段级合并 |
+| POST | `/users/me/password` | 修改密码并撤销其他会话，同时递增设置版本 |
+
+设置并发语义：
+
+- `PATCH /users/me` 只合并请求中显式提交的偏好字段（`displayName`、`defaultInstrument`、`timezone`、`locale`），未提交字段保留较新值；`version` 不匹配时返回 `409 VERSION_CONFLICT`，客户端应重新加载后合并重试。
+- 密码等安全设置变更会递增 `version`，此后持旧版本的偏好修改必然冲突，并发修改不会覆盖较新的安全设置。
+- 时区与界面语言保存后同时作用于历史时间显示与统计分桶口径；默认乐器用于新建练习预填。
 
 ## 练习
 
@@ -127,7 +133,7 @@ Refresh Cookie 路径为 `/api/v1/auth`，生产环境在 HTTPS 下自动使用 
 | POST | `/exports` | 创建 JSON/CSV 用户数据导出 |
 | GET | `/exports/:id` | 查询导出状态和短时下载地址 |
 
-统计接口必须传 `from`、`to` 和 IANA `timezone`。
+统计接口必须传 `from`、`to` 和 IANA `timezone`。Web 端默认使用设置中的用户时区，并按该时区切分自然日区间，与历史列表的时间显示保持同一口径。
 
 ## 健康检查
 
