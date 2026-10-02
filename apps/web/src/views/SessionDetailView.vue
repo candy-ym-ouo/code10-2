@@ -201,9 +201,9 @@ onMounted(load);
 
 <style scoped>
 .detail-grid { display: grid; grid-template-columns: 240px minmax(420px, 1fr) 330px; gap: 16px; align-items: start; }
-.media-tab, .annotation-tab { display: grid; gap: 4px; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; text-align: left; cursor: pointer; }
+.media-tab, .annotation-tab { display: grid; gap: 4px; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field-bg); text-align: left; cursor: pointer; }
 .annotation-tab { grid-template-columns: auto 1fr; align-items: center; }
-.media-tab.active, .annotation-tab.active { border-color: var(--primary); background: #edf7f4; }
+.media-tab.active, .annotation-tab.active { border-color: var(--primary); background: var(--primary-soft); }
 .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .summary-grid p { margin: 5px 0 0; white-space: pre-wrap; }
 .annotation-detail { padding: 12px 0; border-bottom: 1px solid var(--line); }

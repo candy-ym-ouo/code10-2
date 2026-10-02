@@ -9,7 +9,10 @@ use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipCompo
 import { apiFetch, ApiError } from "../api/client.js";
 import LoadingBlock from "../components/LoadingBlock.vue";
 import MetricCard from "../components/MetricCard.vue";
-import { annotationLabels, formatDuration } from "../utils/format.js";
+import { annotationLabels, formatDuration, startOfYearInZone, todayInZone, zonedWallTimeToUtc } from "../utils/format.js";
+import { usePreferencesStore } from "../stores/preferences.js";
+
+const preferences = usePreferencesStore();
 
 interface Overview { practiceCount: number; totalDurationMs: number; annotationCount: number; averageAnnotationsPerPractice: number; newGoalCount: number; completedGoalCount: number; overdueGoalCount: number; goalCompletionRate: number }
 interface Trends { data: Array<{ date: string; practiceCount: number; durationMs: number; annotationCount: number }> }
@@ -18,8 +21,10 @@ interface GoalStats { newGoals: number; completedGoals: number; dueGoals: number
 interface Instruments { data: Array<{ instrument: string; practiceCount: number; durationMs: number; annotationCount: number }> }
 
 const range = ref("30");
-const customFrom = ref(new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10));
-const customTo = ref(new Date().toISOString().slice(0, 10));
+// 自定义日期与统计时区都来自设置中的用户偏好，保证自然日边界与服务端分桶口径一致。
+const customFrom = ref(todayInZone(preferences.timezone, new Date(Date.now() - 30 * 86_400_000)));
+const customTo = ref(todayInZone(preferences.timezone));
+const instrument = ref(preferences.defaultInstrument);
 const overview = ref<Overview | null>(null);
 const trends = ref<Trends | null>(null);
 const issues = ref<Issues | null>(null);
@@ -35,10 +40,15 @@ let issueChart: ECharts | null = null;
 let instrumentChart: ECharts | null = null;
 
 function dates(): { from: Date; to: Date } {
+  const timezone = preferences.timezone;
+  if (range.value === "custom") {
+    return {
+      from: zonedWallTimeToUtc(customFrom.value, "00:00:00", timezone),
+      to: new Date(zonedWallTimeToUtc(customTo.value, "23:59:59", timezone).getTime() + 999),
+    };
+  }
   const to = new Date();
-  if (range.value === "custom") return { from: new Date(`${customFrom.value}T00:00:00`), to: new Date(`${customTo.value}T23:59:59.999`) };
-  const days = Number(range.value);
-  const from = range.value === "year" ? new Date(to.getFullYear(), 0, 1) : new Date(to.getTime() - days * 86_400_000);
+  const from = range.value === "year" ? startOfYearInZone(Number(todayInZone(timezone, to).slice(0, 4)), timezone) : new Date(to.getTime() - Number(range.value) * 86_400_000);
   return { from, to };
 }
 
@@ -47,7 +57,13 @@ async function load(): Promise<void> {
   error.value = "";
   try {
     const { from, to } = dates();
-    const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai" });
+    const params = new URLSearchParams({
+      from: from.toISOString(),
+      to: to.toISOString(),
+      // 统计口径与历史显示共用设置中的同一时区，不再读取浏览器本地时区。
+      timezone: preferences.timezone,
+    });
+    if (instrument.value.trim()) params.set("instrument", instrument.value.trim());
     const [overviewResult, trendsResult, issuesResult, goalsResult, instrumentsResult] = await Promise.all([
       apiFetch<Overview>(`/api/v1/statistics/overview?${params}`),
       apiFetch<Trends>(`/api/v1/statistics/trends?${params}`),
@@ -118,11 +134,12 @@ onBeforeUnmount(() => { window.removeEventListener("resize", resize); trendChart
     <header class="page-header">
       <div><h1>练习统计</h1><p>所有指标由已完成练习、标记、目标与进度实时聚合，不在前端重算口径。</p></div>
       <div class="row">
+        <input v-model="instrument" placeholder="按乐器筛选（默认默认乐器）" aria-label="按乐器筛选" style="width: 210px" @keydown.enter="load" />
         <select v-model="range" style="width: 150px" @change="load"><option value="7">近 7 天</option><option value="30">近 30 天</option><option value="90">近 90 天</option><option value="year">今年</option><option value="custom">自定义</option></select>
         <button class="button secondary" @click="load">刷新</button>
       </div>
     </header>
-    <div v-if="range === 'custom'" class="card row wrap" style="margin-bottom: 18px"><label class="field"><span>开始日期</span><input v-model="customFrom" type="date" /></label><label class="field"><span>结束日期</span><input v-model="customTo" type="date" /></label><button class="button" @click="load">应用</button></div>
+    <div v-if="range === 'custom'" class="card row wrap" style="margin-bottom: 18px"><label class="field"><span>开始日期（{{ preferences.timezone }}）</span><input v-model="customFrom" type="date" /></label><label class="field"><span>结束日期（{{ preferences.timezone }}）</span><input v-model="customTo" type="date" /></label><button class="button" @click="load">应用</button></div>
     <LoadingBlock v-if="loading" />
     <div v-else-if="error" class="alert">{{ error }} <button class="button small ghost" @click="load">重试</button></div>
     <template v-else-if="overview && goals">

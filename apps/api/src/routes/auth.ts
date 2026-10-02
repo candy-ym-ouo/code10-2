@@ -7,6 +7,7 @@ import { prisma } from "../lib/prisma.js";
 import { audit } from "../lib/audit.js";
 import { issueRefreshSession, REFRESH_COOKIE, rotateRefreshSession } from "../services/auth-service.js";
 import { hashRefreshToken } from "../lib/security.js";
+import { publicUserSelect } from "../lib/user.js";
 
 const authRoutes: FastifyPluginAsync = async (app) => {
   app.post(
@@ -22,7 +23,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
           displayName: input.displayName,
           passwordHash: await hashPassword(input.password),
         },
-        select: { id: true, email: true, displayName: true, defaultInstrument: true, timezone: true, locale: true },
+        select: publicUserSelect,
       });
       const session = await issueRefreshSession(reply, request, user);
       await audit(request, "AUTH_REGISTER", "USER", user.id, "SUCCESS");
@@ -51,6 +52,8 @@ const authRoutes: FastifyPluginAsync = async (app) => {
           defaultInstrument: user.defaultInstrument,
           timezone: user.timezone,
           locale: user.locale,
+          theme: user.theme,
+          version: user.version,
         },
         accessToken: session.accessToken,
       };

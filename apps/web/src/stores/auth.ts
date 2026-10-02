@@ -2,6 +2,8 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { apiFetch, initializeSession, setAccessToken } from "../api/client.js";
 
+export type InterfaceTheme = "LIGHT" | "DARK" | "SYSTEM";
+
 export interface User {
   id: string;
   email: string;
@@ -9,6 +11,8 @@ export interface User {
   defaultInstrument: string | null;
   timezone: string;
   locale: string;
+  theme: InterfaceTheme;
+  version: number;
 }
 
 export const useAuthStore = defineStore("auth", () => {

@@ -30,9 +30,27 @@ Refresh Cookie 路径为 `/api/v1/auth`，生产环境在 HTTPS 下自动使用 
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/users/me` | 当前用户 |
-| PATCH | `/users/me` | 更新展示名、默认乐器、时区和语言 |
-| POST | `/users/me/password` | 修改密码并撤销其他会话 |
+| GET | `/users/me` | 当前用户（含 `timezone`、`defaultInstrument`、`locale`、`theme`、`version`） |
+| PATCH | `/users/me` | 乐观锁字段级合并更新展示名、默认乐器、时区、语言和主题，必须带 `version` |
+| POST | `/users/me/password` | 修改密码、推进版本并撤销其他会话 |
+
+PATCH `/users/me` 采用**字段级合并 + 版本乐观锁**：
+
+- 请求只包含要修改的字段，未携带的偏好保持服务端现值不变，不会被整体覆盖。
+- 请求体必须带 `version`（GET `/users/me` 返回的当前版本）。版本落后时返回 `409 VERSION_CONFLICT`，前端应拉取最新版本后由用户合并再保存。
+- 安全字段（密码哈希等）不经过此接口；修改密码会推进 `version`，使持有旧版本的偏好保存请求无法覆盖较新的安全状态。
+- `theme` 取值 `LIGHT` / `DARK` / `SYSTEM`；`locale` 目前支持 `zh-CN`、`en-US`；`timezone` 必须是合法 IANA 时区。
+
+```json
+{
+  "version": 3,
+  "displayName": "小林",
+  "defaultInstrument": "小提琴",
+  "timezone": "Asia/Shanghai",
+  "locale": "zh-CN",
+  "theme": "SYSTEM"
+}
+```
 
 ## 练习
 
@@ -127,7 +145,7 @@ Refresh Cookie 路径为 `/api/v1/auth`，生产环境在 HTTPS 下自动使用 
 | POST | `/exports` | 创建 JSON/CSV 用户数据导出 |
 | GET | `/exports/:id` | 查询导出状态和短时下载地址 |
 
-统计接口必须传 `from`、`to` 和 IANA `timezone`。
+统计接口必须传 `from`、`to` 和 IANA `timezone`。Web 端始终传入用户在设置中保存的时区；历史列表的已完成练习与统计聚合都按 `completed_at` 落入同一 `[from, to]` 区间，保证两处口径一致。
 
 ## 健康检查
 

@@ -161,8 +161,8 @@ defineExpose({ playPause, seek, getCurrentTime, getDuration, setLoop });
 </template>
 
 <style scoped>
-.wave-panel { border: 1px solid var(--line); border-radius: var(--radius); background: #fbfcfb; overflow: hidden; }
-.wave-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line); background: #fff; }
+.wave-panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-soft); overflow: hidden; }
+.wave-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--field-bg); }
 .time-display { font-variant-numeric: tabular-nums; font-weight: 750; min-width: 135px; }
 .speed-control, .zoom-control { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .86rem; }
 .speed-control select { width: 78px; padding: 5px 7px; }
@@ -172,7 +172,7 @@ defineExpose({ playPause, seek, getCurrentTime, getDuration, setLoop });
 .ruler span { position: absolute; bottom: 4px; transform: translateX(-50%); font-size: .68rem; color: var(--muted); white-space: nowrap; }
 .waveform { min-height: 170px; padding: 0 16px 6px; }
 .waveform-empty { margin: 16px; }
-.marker-track { position: relative; height: 38px; margin: 0 16px 12px; border: 1px solid var(--line); border-radius: 8px; background: #eef2f0; overflow: hidden; }
+.marker-track { position: relative; height: 38px; margin: 0 16px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); overflow: hidden; }
 .wave-marker { position: absolute; top: 6px; height: 24px; min-width: 3px; padding: 0 4px; border: 1px solid rgb(0 0 0 / 12%); border-radius: 5px; overflow: hidden; color: #fff; font-size: .67rem; text-align: left; cursor: pointer; }
 .wave-marker.RHYTHM { background: var(--rhythm); }
 .wave-marker.FINGERING { background: var(--fingering); }

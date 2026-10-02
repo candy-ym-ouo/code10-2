@@ -2,14 +2,15 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { apiFetch, ApiError } from "../api/client.js";
-import { useAuthStore } from "../stores/auth.js";
-import { toDateTimeLocal } from "../utils/format.js";
+import { usePreferencesStore } from "../stores/preferences.js";
+import { toDateTimeLocal, zonedWallTimeToUtc } from "../utils/format.js";
 
 const router = useRouter();
-const auth = useAuthStore();
+const preferences = usePreferencesStore();
 const title = ref("");
 const instrument = ref("");
-const startedAt = ref(toDateTimeLocal());
+// 开始时间按设置中的时区生成钟面值，而不是浏览器本地时区。
+const startedAt = ref(toDateTimeLocal(new Date(), preferences.timezone));
 const focus = ref("");
 const location = ref("");
 const notes = ref("");
@@ -17,7 +18,8 @@ const durationMinutes = ref<number | null>(null);
 const error = ref("");
 const submitting = ref(false);
 
-onMounted(() => { instrument.value = auth.user?.defaultInstrument ?? ""; });
+// 默认乐器来自设置；用户仍可在本次练习中临时修改。
+onMounted(() => { instrument.value = preferences.defaultInstrument; });
 
 async function submit(): Promise<void> {
   error.value = "";
@@ -28,7 +30,7 @@ async function submit(): Promise<void> {
       body: JSON.stringify({
         title: title.value,
         instrument: instrument.value,
-        startedAt: new Date(startedAt.value).toISOString(),
+        startedAt: zonedWallTimeToUtc(startedAt.value.slice(0, 10), `${startedAt.value.slice(11)}:00`, preferences.timezone).toISOString(),
         focus: focus.value || null,
         location: location.value || null,
         notes: notes.value || null,

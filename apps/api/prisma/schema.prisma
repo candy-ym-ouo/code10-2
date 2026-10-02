@@ -13,6 +13,12 @@ enum UserStatus {
   DELETING
 }
 
+enum InterfaceTheme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
 enum SessionStatus {
   DRAFT
   IN_REVIEW
@@ -89,6 +95,8 @@ model User {
   defaultInstrument String?          @map("default_instrument") @db.VarChar(60)
   timezone          String           @default("Asia/Shanghai") @db.VarChar(64)
   locale            String           @default("zh-CN") @db.VarChar(16)
+  theme             InterfaceTheme   @default(SYSTEM)
+  version           Int              @default(0)
   status            UserStatus       @default(ACTIVE)
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)

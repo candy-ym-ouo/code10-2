@@ -38,6 +38,9 @@ export const METRIC_TYPES = [
 ] as const;
 export const EVIDENCE_REQUIREMENTS = ["NONE", "AUDIO", "SELF_REVIEW", "AUDIO_AND_SELF_REVIEW"] as const;
 export const GOAL_STATUSES = ["OPEN", "IN_PROGRESS", "ACHIEVED", "MISSED", "CANCELLED"] as const;
+export const INTERFACE_THEMES = ["LIGHT", "DARK", "SYSTEM"] as const;
+export const SUPPORTED_LOCALES = ["zh-CN", "en-US"] as const;
+export const DEFAULT_TIMEZONE = "Asia/Shanghai";
 
 const requiredText = (label: string, max: number) =>
   z.string().trim().min(1, `${label}不能为空`).max(max, `${label}不能超过 ${max} 个字符`);
@@ -62,10 +65,12 @@ export const loginSchema = z.object({
   password: z.string().min(1, "请输入密码").max(128),
 });
 export const updateProfileSchema = z.object({
+  version: z.coerce.number().int().nonnegative(),
   displayName: requiredText("展示名", 80).optional(),
   defaultInstrument: optionalText(60, "默认乐器"),
   timezone: z.string().trim().min(1).max(64).optional(),
-  locale: z.string().trim().min(2).max(16).optional(),
+  locale: z.enum(SUPPORTED_LOCALES).optional(),
+  theme: z.enum(INTERFACE_THEMES).optional(),
 });
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(128),
@@ -191,7 +196,7 @@ export const completionSchema = z.object({
 export const statisticsRangeSchema = z.object({
   from: z.coerce.date(),
   to: z.coerce.date(),
-  timezone: z.string().trim().min(1).max(64).default("Asia/Shanghai"),
+  timezone: z.string().trim().min(1).max(64).default(DEFAULT_TIMEZONE),
   instrument: z.string().trim().max(60).optional(),
 });
 
@@ -209,6 +214,7 @@ export type AnnotationType = (typeof ANNOTATION_TYPES)[number];
 export type GoalCategory = (typeof GOAL_CATEGORIES)[number];
 export type MetricType = (typeof METRIC_TYPES)[number];
 export type GoalStatus = (typeof GOAL_STATUSES)[number];
+export type InterfaceTheme = (typeof INTERFACE_THEMES)[number];
 export type EvidenceRequirement = (typeof EVIDENCE_REQUIREMENTS)[number];
 
 export interface ApiErrorBody {

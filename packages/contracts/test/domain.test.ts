@@ -4,6 +4,7 @@ import {
   canTransitionSession,
   describeMissingReview,
   isGoalProgressValid,
+  updateProfileSchema,
   validateAnnotationRange,
 } from "../src/index.js";
 
@@ -46,5 +47,26 @@ describe("goal values", () => {
 
   it("sums only valid media durations", () => {
     expect(calculateSessionDuration([1000, null, 2500, -1])).toBe(3500);
+  });
+});
+
+describe("profile update merge contract", () => {
+  it("requires an optimistic-lock version", () => {
+    expect(updateProfileSchema.safeParse({ displayName: "小林" }).success).toBe(false);
+    expect(updateProfileSchema.safeParse({ version: 0, displayName: "小林" }).success).toBe(true);
+  });
+
+  it("accepts partial preference payloads for field-level merge", () => {
+    const parsed = updateProfileSchema.parse({ version: 2, timezone: "America/New_York" });
+    expect(parsed).toMatchObject({ version: 2, timezone: "America/New_York" });
+    expect(parsed.displayName).toBeUndefined();
+    expect(parsed.theme).toBeUndefined();
+  });
+
+  it("restricts theme and locale to supported values", () => {
+    expect(updateProfileSchema.safeParse({ version: 0, theme: "DARK" })).toBeDefined();
+    expect(updateProfileSchema.safeParse({ version: 0, theme: "NEON" }).success).toBe(false);
+    expect(updateProfileSchema.safeParse({ version: 0, locale: "fr-FR" }).success).toBe(false);
+    expect(updateProfileSchema.safeParse({ version: 0, locale: "en-US" }).success).toBe(true);
   });
 });

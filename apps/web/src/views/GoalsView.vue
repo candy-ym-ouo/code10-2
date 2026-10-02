@@ -4,7 +4,10 @@ import { apiFetch, ApiError } from "../api/client.js";
 import EmptyState from "../components/EmptyState.vue";
 import LoadingBlock from "../components/LoadingBlock.vue";
 import StatusBadge from "../components/StatusBadge.vue";
-import { goalStatusLabels } from "../utils/format.js";
+import { goalStatusLabels, todayInZone, zonedWallTimeToUtc } from "../utils/format.js";
+import { usePreferencesStore } from "../stores/preferences.js";
+
+const preferences = usePreferencesStore();
 
 interface Goal {
   id: string; title: string; category: string; metricType: string; baselineValue: number | null; targetValue: number; unit: string; dueDate: string;
@@ -26,7 +29,8 @@ const progressValue = reactive<Record<string, string>>({});
 const progressNote = reactive<Record<string, string>>({});
 const form = reactive({
   sourceSessionId: "", title: "", category: "RHYTHM", metricType: "SPEED", baselineValue: "", targetValue: "", unit: "BPM",
-  dueDate: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10), method: "", evidenceRequirement: "NONE", annotationId: "",
+  // 截止日期按用户设置时区的自然日提交，避免浏览器时区导致日期偏移一天。
+  dueDate: todayInZone(preferences.timezone, new Date(Date.now() + 7 * 86_400_000)), method: "", evidenceRequirement: "NONE", annotationId: "",
 });
 
 async function load(): Promise<void> {
@@ -60,7 +64,8 @@ async function createGoal(): Promise<void> {
       baselineValue: form.baselineValue === "" ? null : Number(form.baselineValue),
       targetValue: Number(form.targetValue),
       unit: form.unit,
-      dueDate: new Date(`${form.dueDate}T12:00:00.000Z`).toISOString(),
+      // 取用户时区该自然日的中午时刻提交，使 DATE 列落入选中日期。
+      dueDate: zonedWallTimeToUtc(form.dueDate, "12:00:00", preferences.timezone).toISOString(),
       method: form.method || null,
       evidenceRequirement: form.evidenceRequirement,
     }),

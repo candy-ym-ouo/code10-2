@@ -5,7 +5,10 @@ import { createSHA256 } from "hash-wasm";
 import WaveformPlayer, { type WaveAnnotation } from "../components/WaveformPlayer.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 import { apiFetch, ApiError } from "../api/client.js";
-import { annotationLabels, formatBytes, formatTimeMs, parseTimeInput } from "../utils/format.js";
+import { annotationLabels, formatBytes, formatTimeMs, parseTimeInput, toDateTimeLocal, todayInZone, zonedWallTimeToUtc } from "../utils/format.js";
+import { usePreferencesStore } from "../stores/preferences.js";
+
+const preferences = usePreferencesStore();
 
 type AnnotationType = "RHYTHM" | "FINGERING" | "EMOTION";
 interface Media {
@@ -86,6 +89,15 @@ const activeUploads = computed(() => uploads.value.filter((item) => !["READY", "
 const startMs = computed(() => parseTimeInput(annotationForm.startText) ?? 0);
 const endMs = computed(() => parseTimeInput(annotationForm.endText) ?? 0);
 
+// datetime-local 与 date 输入都按用户设置中的时区解释为 UTC 时刻。
+function zonedDateTimeLocalToIso(value: string): string {
+  return zonedWallTimeToUtc(value.slice(0, 10), `${value.slice(11)}:00`, preferences.timezone).toISOString();
+}
+function zonedDueDateToIso(dateText: string): string {
+  // 取用户时区该自然日的中午时刻提交，使数据库 DATE 列稳定落入选中日期。
+  return zonedWallTimeToUtc(dateText, "12:00:00", preferences.timezone).toISOString();
+}
+
 async function loadSession(): Promise<void> {
   loading.value = true;
   error.value = "";
@@ -97,7 +109,9 @@ async function loadSession(): Promise<void> {
       mainIssues: result.session.review.mainIssues ?? "",
       nextFocus: result.session.review.nextFocus ?? "",
       noIssues: result.session.review.noIssues,
-      suggestedNextPracticeAt: result.session.review.suggestedNextPracticeAt?.slice(0, 16) ?? "",
+      suggestedNextPracticeAt: result.session.review.suggestedNextPracticeAt
+        ? toDateTimeLocal(new Date(result.session.review.suggestedNextPracticeAt), preferences.timezone)
+        : "",
     });
     const first = result.session.mediaAssets.find((media) => media.status === "READY") ?? result.session.mediaAssets[0];
     if (first) await selectMedia(first.id);
@@ -293,7 +307,7 @@ async function saveReview(): Promise<void> {
         mainIssues: reviewForm.mainIssues || null,
         nextFocus: reviewForm.nextFocus || null,
         noIssues: reviewForm.noIssues,
-        suggestedNextPracticeAt: reviewForm.suggestedNextPracticeAt ? new Date(reviewForm.suggestedNextPracticeAt).toISOString() : null,
+        suggestedNextPracticeAt: reviewForm.suggestedNextPracticeAt ? zonedDateTimeLocalToIso(reviewForm.suggestedNextPracticeAt) : null,
       }),
     });
     session.value.version += 1;
@@ -316,7 +330,7 @@ function scheduleReviewSave(): void {
 function addGoal(): void {
   newGoals.value.push({
     key: crypto.randomUUID(), title: "", category: "RHYTHM", metricType: "SPEED", baselineValue: "", targetValue: "", unit: "BPM",
-    dueDate: new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10), method: "", evidenceRequirement: "NONE", annotationId: "",
+    dueDate: todayInZone(preferences.timezone, new Date(Date.now() + 7 * 86_400_000)), method: "", evidenceRequirement: "NONE", annotationId: "",
   });
 }
 
@@ -346,7 +360,7 @@ async function completeReview(): Promise<void> {
           mainIssues: reviewForm.mainIssues || null,
           nextFocus: reviewForm.nextFocus,
           noIssues: reviewForm.noIssues,
-          suggestedNextPracticeAt: reviewForm.suggestedNextPracticeAt ? new Date(reviewForm.suggestedNextPracticeAt).toISOString() : null,
+          suggestedNextPracticeAt: reviewForm.suggestedNextPracticeAt ? zonedDateTimeLocalToIso(reviewForm.suggestedNextPracticeAt) : null,
         },
         goalCreates: newGoals.value.map((goal) => ({
           annotationId: goal.annotationId || null,
@@ -356,7 +370,7 @@ async function completeReview(): Promise<void> {
           baselineValue: goal.baselineValue === "" ? null : Number(goal.baselineValue),
           targetValue: Number(goal.targetValue),
           unit: goal.unit,
-          dueDate: new Date(`${goal.dueDate}T23:59:59.999Z`).toISOString(),
+          dueDate: zonedDueDateToIso(goal.dueDate),
           method: goal.method || null,
           evidenceRequirement: goal.evidenceRequirement,
         })),
@@ -529,19 +543,19 @@ onMounted(loadSession);
 .review-grid { display: grid; grid-template-columns: minmax(220px, 270px) minmax(420px, 1fr) minmax(300px, 360px); gap: 16px; align-items: start; }
 .media-panel, .review-side { position: sticky; top: 86px; max-height: calc(100vh - 108px); overflow-y: auto; }
 .media-list { margin-top: 14px; }
-.dropzone { display: grid; place-items: center; gap: 4px; padding: 18px; border: 1px dashed #9eb2ab; border-radius: 12px; text-align: center; cursor: pointer; background: #f7faf8; }
+.dropzone { display: grid; place-items: center; gap: 4px; padding: 18px; border: 1px dashed var(--empty-line); border-radius: 12px; text-align: center; cursor: pointer; background: var(--surface-soft); }
 .dropzone.dragging { border-color: var(--primary); background: var(--primary-soft); }
 .dropzone small { max-width: 210px; }
-.media-item { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 8px; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; text-align: left; cursor: pointer; }
-.media-item.active { border-color: var(--primary); background: #edf7f4; }
+.media-item { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 8px; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field-bg); text-align: left; cursor: pointer; }
+.media-item.active { border-color: var(--primary); background: var(--primary-soft); }
 .media-icon { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; background: var(--surface-soft); }
 .media-copy { min-width: 0; }
 .media-copy strong, .media-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .upload-item { margin-top: 12px; padding: 10px; border-radius: 10px; background: var(--surface-soft); }
 .upload-item .progress-bar { margin-top: 7px; }
 .annotation-list { display: grid; gap: 8px; }
-.annotation-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; text-align: left; cursor: pointer; }
-.annotation-row.active { border-color: var(--primary); background: #edf7f4; }
+.annotation-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field-bg); text-align: left; cursor: pointer; }
+.annotation-row.active { border-color: var(--primary); background: var(--primary-soft); }
 .annotation-row span strong, .annotation-row span small { display: block; }
 .boundary { height: 42px; align-self: end; }
 .goal-progress-row, .new-goal { display: grid; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--line); }

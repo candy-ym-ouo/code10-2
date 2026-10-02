@@ -54,17 +54,34 @@ export async function getSessionForUser(userId: string, sessionId: string) {
 }
 
 export async function listSessions(userId: string, query: z.infer<typeof sessionListQuerySchema>) {
+  // 历史显示与统计口径保持一致：已完成练习按完成时间（completedAt）落在区间内过滤，
+  // 与 statistics 服务聚合 COMPLETED 练习时使用的时间字段相同；
+  // 尚未完成的草稿/复盘中练习仍按开始时间过滤。
+  const filterByCompletedAt = query.status === "COMPLETED" || query.status === "ALL";
   const where: Prisma.PracticeSessionWhereInput = {
     userId,
     ...(query.status !== "ALL" ? { status: query.status as SessionStatus } : {}),
     ...(query.instrument ? { instrument: { equals: query.instrument, mode: "insensitive" } } : {}),
     ...(query.from || query.to
-      ? {
-          startedAt: {
-            ...(query.from ? { gte: query.from } : {}),
-            ...(query.to ? { lte: query.to } : {}),
-          },
-        }
+      ? filterByCompletedAt
+        ? {
+            OR: [
+              {
+                status: "COMPLETED",
+                completedAt: { ...(query.from ? { gte: query.from } : {}), ...(query.to ? { lte: query.to } : {}) },
+              },
+              {
+                status: { not: "COMPLETED" },
+                startedAt: { ...(query.from ? { gte: query.from } : {}), ...(query.to ? { lte: query.to } : {}) },
+              },
+            ],
+          }
+        : {
+            startedAt: {
+              ...(query.from ? { gte: query.from } : {}),
+              ...(query.to ? { lte: query.to } : {}),
+            },
+          }
       : {}),
     ...(query.q
       ? {
